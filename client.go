@@ -14,61 +14,65 @@ import (
 
 var yfEndpoint = url.URL{Scheme: "wss", Host: "streamer.finance.yahoo.com", Path: ""}
 
-func Start(ctx context.Context, tick Ticker, subscribeSymbols []string) (err error) {
+func (t *ticker) Start(ctx context.Context) (err error) {
 	log.Printf("connecting to %s...", yfEndpoint.String())
 
-	var conn *websocket.Conn
-
-	if conn, err = connect(yfEndpoint.String(), subscribeSymbols); err != nil {
-		return
-	}
-
-	defer conn.Close()
-
+	var conns []*websocket.Conn
 	done := make(chan struct{})
 
-	go func() {
-		defer close(done)
-		for {
-			_, message, err := conn.ReadMessage()
-			if err != nil {
-				log.Println(err)
+	for _, m := range t.methods {
+		var conn *websocket.Conn
 
-				// Reconnecting in case of 1006 TODO
-				conn.Close()
-				if conn, err = connect(yfEndpoint.String(), subscribeSymbols); err != nil {
+		if conn, err = connect(yfEndpoint.String(), m.GetSymbols()); err != nil {
+			return
+		}
+
+		defer conn.Close()
+
+		go func() {
+			defer close(done)
+			for {
+				_, message, err := conn.ReadMessage()
+				if err != nil {
+					log.Println(err)
+
+					// Reconnecting in case of 1006 TODO
+					conn.Close()
+					if conn, err = connect(yfEndpoint.String(), m.GetSymbols()); err != nil {
+						return
+					}
+
+					continue
+				}
+
+				b := make([]byte, base64.StdEncoding.DecodedLen(len(message)))
+				n, err := base64.StdEncoding.Decode(b, message)
+
+				if err != nil {
 					return
 				}
 
-				continue
+				decodedMessage := b[:n]
+
+				tickTemplateData := &tt.Ticker{}
+				if err = proto.Unmarshal(decodedMessage, tickTemplateData); err != nil {
+					return
+				}
+
+				tickData := Tick{
+					Time:      time.Unix(tickTemplateData.Time/1000, 0).UTC(),
+					Symbol:    tickTemplateData.Id,
+					Price:     tickTemplateData.Price,
+					DayVolume: tickTemplateData.DayVolume,
+				}
+
+				for _, m := range t.methods {
+					m.processTick(tickData)
+				}
 			}
+		}()
 
-			b := make([]byte, base64.StdEncoding.DecodedLen(len(message)))
-			n, err := base64.StdEncoding.Decode(b, message)
-
-			if err != nil {
-				return
-			}
-
-			decodedMessage := b[:n]
-
-			tickTemplateData := &tt.Ticker{}
-			if err = proto.Unmarshal(decodedMessage, tickTemplateData); err != nil {
-				return
-			}
-
-			tickData := Tick{
-				Time:      time.Unix(tickTemplateData.Time/1000, 0).UTC(),
-				Symbol:    tickTemplateData.Id,
-				Price:     tickTemplateData.Price,
-				DayVolume: tickTemplateData.DayVolume,
-			}
-
-			if err = tick.ExposeTick(ctx, tickData); err != nil {
-				return
-			}
-		}
-	}()
+	}
 
 	for {
 		select {
@@ -77,8 +81,10 @@ func Start(ctx context.Context, tick Ticker, subscribeSymbols []string) (err err
 		case <-ctx.Done():
 			log.Println("interrupt")
 
-			if err = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")); err != nil {
-				return
+			for _, conn := range conns {
+				if err = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")); err != nil {
+					return
+				}
 			}
 
 			select {
