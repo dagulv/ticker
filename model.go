@@ -18,6 +18,7 @@ type OHLCV struct {
 	Low    int
 	Close  int
 	Volume int
+	Time   time.Time
 }
 
 type Tick struct {

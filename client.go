@@ -17,10 +17,10 @@ var yfEndpoint = url.URL{Scheme: "wss", Host: "streamer.finance.yahoo.com", Path
 func (t *ticker) Start(ctx context.Context) (err error) {
 	log.Printf("connecting to %s...", yfEndpoint.String())
 
-	var conns []*websocket.Conn
+	conns := make([]*websocket.Conn, len(t.methods))
 	done := make(chan struct{})
 
-	for _, m := range t.methods {
+	for i, m := range t.methods {
 		var conn *websocket.Conn
 
 		if conn, err = connect(yfEndpoint.String(), m.GetSymbols()); err != nil {
@@ -28,6 +28,8 @@ func (t *ticker) Start(ctx context.Context) (err error) {
 		}
 
 		defer conn.Close()
+
+		conns[i] = conn
 
 		go func() {
 			defer close(done)

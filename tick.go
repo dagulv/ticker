@@ -29,5 +29,5 @@ func (m tick) newMethod(s Store) method {
 }
 
 func (m tick) Store() {
-	m.store.Store(nil, m)
+	m.store.Push(nil, m)
 }

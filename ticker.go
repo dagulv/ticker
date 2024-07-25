@@ -8,7 +8,7 @@ type Ticker interface {
 }
 
 type Store interface {
-	Store(context.Context, method)
+	Push(context.Context, method)
 }
 
 type method interface {

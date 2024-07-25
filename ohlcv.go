@@ -29,5 +29,5 @@ func (m ohlcv) newMethod(s Store) method {
 }
 
 func (m ohlcv) Store() {
-	m.store.Store(nil, m)
+	m.store.Push(nil, m)
 }
