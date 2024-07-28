@@ -1,36 +1,70 @@
 package ticker
 
-import "context"
+import (
+	"log"
+)
 
-type Ticker interface {
-	Add(method, Store)
-	Start(context.Context) error
+type Method interface {
+	processTick(Store, Tick)
 }
 
 type Store interface {
-	Push(context.Context, method)
+	Push(Method)
 }
 
-type method interface {
-	processTick(Tick)
-	Add(...string)
-	GetData() any
-	GetSymbols() []string
-	newMethod(Store) method
-	Store()
-}
-
-type ticker struct {
-	methods []method
-}
-
-func New() Ticker {
-	return &ticker{
-		methods: make([]method, 0),
+func New(m Method, s Store, symbols ...string) Ticker {
+	return Ticker{
+		data:    m,
+		symbols: symbols,
+		store:   s,
 	}
 }
 
-func (t *ticker) Add(m method, s Store) {
-
-	t.methods = append(t.methods, m.newMethod(s))
+type Ticker struct {
+	data    Method
+	symbols []string
+	store   Store
 }
+
+func (t Ticker) processTick(tick Tick, m Method) {
+	log.Println("ticker.go")
+
+	m.processTick(t.store, tick)
+}
+
+// package ticker
+
+// import "log"
+
+// type MethodType interface {
+// 	Tick | Ohlcv
+// }
+
+// type Method interface {
+// 	MethodType
+// 	processTick(Tick)
+// }
+
+// type Store[T MethodType] interface {
+// 	Push(T)
+// }
+
+// func New[T Method](s Store[T], symbols ...string) Ticker[T] {
+// 	return Ticker[T]{
+// 		symbols: symbols,
+// 		store:   s,
+// 	}
+// }
+
+// type Ticker[T Method] struct {
+// 	data    T
+// 	symbols []string
+// 	store   Store[T]
+// }
+
+// func (t Ticker[T]) processTick(tick Tick, m T) {
+// 	log.Println("ticker.go")
+
+// 	m.processTick()
+// 	// t.store.Push(m.processTick)
+// }
