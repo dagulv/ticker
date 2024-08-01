@@ -14,14 +14,14 @@ import (
 
 var yfEndpoint = url.URL{Scheme: "wss", Host: "streamer.finance.yahoo.com", Path: ""}
 
-func (t *Ticker) Start(ctx context.Context) (err error) {
+func (t *Ticker[T, I]) StartWebsocket(ctx context.Context) (err error) {
 	log.Printf("connecting to %s...", yfEndpoint.String())
 
 	done := make(chan struct{})
 
 	var conn *websocket.Conn
 
-	if conn, err = connect(yfEndpoint.String(), t.symbols); err != nil {
+	if conn, err = connect(yfEndpoint.String(), t.identifier); err != nil {
 		return
 	}
 
@@ -36,7 +36,7 @@ func (t *Ticker) Start(ctx context.Context) (err error) {
 
 				// Reconnecting in case of 1006 TODO
 				conn.Close()
-				if conn, err = connect(yfEndpoint.String(), t.symbols); err != nil {
+				if conn, err = connect(yfEndpoint.String(), t.identifier); err != nil {
 					return
 				}
 
@@ -88,14 +88,14 @@ func (t *Ticker) Start(ctx context.Context) (err error) {
 	}
 }
 
-func connect(endpoint string, subscribeSymbols []string) (conn *websocket.Conn, err error) {
+func connect[I any](endpoint string, subscribeSymbols []I) (conn *websocket.Conn, err error) {
 	conn, _, err = websocket.DefaultDialer.Dial(endpoint, nil)
 
 	if err != nil {
 		return
 	}
 
-	subscribeMessage := SubscribeMessage{
+	subscribeMessage := SubscribeMessage[I]{
 		Subscribe: subscribeSymbols,
 	}
 

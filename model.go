@@ -5,6 +5,6 @@ type Company struct {
 	Name   string `json:"name"`
 }
 
-type SubscribeMessage struct {
-	Subscribe []string `json:"subscribe"`
+type SubscribeMessage[I any] struct {
+	Subscribe []I `json:"subscribe"`
 }

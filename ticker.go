@@ -12,21 +12,20 @@ type Store interface {
 	Push(Method)
 }
 
-func New(m Method, s Store, symbols ...string) Ticker {
-	return Ticker{
-		data:    m,
-		symbols: symbols,
-		store:   s,
+func New[T Method, I any](s Store, identifier ...I) Ticker[T, I] {
+	return Ticker[T, I]{
+		identifier: identifier,
+		store:      s,
 	}
 }
 
-type Ticker struct {
-	data    Method
-	symbols []string
-	store   Store
+type Ticker[T Method, I any] struct {
+	data       T
+	identifier []I
+	store      Store
 }
 
-func (t Ticker) processTick(tick Tick, m Method) {
+func (t Ticker[T, I]) processTick(tick Tick, m Method) {
 	log.Println("ticker.go")
 
 	m.processTick(t.store, tick)
