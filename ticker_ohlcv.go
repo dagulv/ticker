@@ -2,56 +2,55 @@ package ticker
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
-	"fmt"
-	"log"
 	"net/http"
+	"strconv"
 	"time"
 
-	"github.com/rs/xid"
+	"github.com/robfig/cron/v3"
 )
 
 var (
-	client         = &http.Client{Timeout: 10 * time.Second}
+	client = &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				MinVersion: tls.VersionTLS13,
+			},
+		},
+	}
 	avanzaEndpoint = "https://www.avanza.se/_api/price-chart/stock"
 	timePeriod     = "today"
 )
 
-func (t Ticker[T, I]) FetchHistoric(ctx context.Context) {
-	ticker := time.NewTicker(time.Second)
-	var doneForToday bool
-	done := make(chan bool)
-	go func() {
-		defer close(done)
-		for {
-			select {
-			case <-ctx.Done():
-				ticker.Stop()
-				return
-			case <-ticker.C:
-				h, _, _ := time.Now().Clock()
-				if h > 19 || h < 7 {
-					if doneForToday {
-						continue
-					}
-
-					for _, id := range t.identifier {
-						t.fetchData(id)
-						time.Sleep(time.Second)
-					}
-					doneForToday = true
-				} else if doneForToday {
-					doneForToday = false
-				}
-			}
+func (t Ticker[T, I]) HistoricJob(ctx context.Context) {
+	c := cron.New()
+	job := func() {
+		for i := range t.identifier {
+			t.fetchData(i)
 		}
-	}()
+	}
+	c.AddFunc("0 23 * * 1-5", job)
+
+	c.Start()
 }
 
-func (t Ticker[T, I]) fetchData(id I) {
+func (t Ticker[T, I]) fetchData(index int) {
 	var data AvanzaHistory
 
-	resp, err := client.Get(fmt.Sprintf("%s/%d?timePeriod=%s", avanzaEndpoint, id, timePeriod))
+	url := avanzaEndpoint + "/" + strconv.Itoa(any(t.identifier[index]).(int)) + "?timePeriod=" + timePeriod
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+
+	if err != nil {
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "ticker")
+
+	resp, err := client.Do(req)
 
 	if err != nil {
 		return
@@ -62,10 +61,10 @@ func (t Ticker[T, I]) fetchData(id I) {
 	if err = json.NewDecoder(resp.Body).Decode(&data); err != nil {
 		return
 	}
-	log.Println(data.Ohlcv)
+
 	for _, single := range data.Ohlcv {
 		t.store.Push(Ohlcv{
-			Id:     any(id).(xid.ID),
+			Id:     t.ids[index],
 			Open:   single.Open,
 			High:   single.High,
 			Low:    single.Low,

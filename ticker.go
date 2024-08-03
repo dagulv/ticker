@@ -2,6 +2,8 @@ package ticker
 
 import (
 	"log"
+
+	"github.com/rs/xid"
 )
 
 type Method interface {
@@ -12,8 +14,9 @@ type Store interface {
 	Push(Method)
 }
 
-func New[T Method, I any](s Store, identifier ...I) Ticker[T, I] {
+func New[T Method, I any](s Store, ids []xid.ID, identifier []I) Ticker[T, I] {
 	return Ticker[T, I]{
+		ids:        ids,
 		identifier: identifier,
 		store:      s,
 	}
@@ -21,6 +24,7 @@ func New[T Method, I any](s Store, identifier ...I) Ticker[T, I] {
 
 type Ticker[T Method, I any] struct {
 	data       T
+	ids        []xid.ID
 	identifier []I
 	store      Store
 }
